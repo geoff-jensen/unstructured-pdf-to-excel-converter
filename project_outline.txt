@@ -1,0 +1,36 @@
+STEP 1: Parse the PDF 
+
+Detailed Directions & Parsing Logic (Provided by Client):
+These rules are not suggestions — they are your parsing requirements:
+
+Program Number
+    - Always starts each record in the PDF.
+    - Remove the brackets.
+    - Must be a clean 10-digit value.
+
+Program Name
+    - Appears immediately after the Program Number.
+    - Often split across 1–3 lines.
+    - Must stop before the address or “Ph:” line.
+    - Do not include address lines.
+
+Program Director Name
+    - Appears below the email address and before the “Accreditation Status.”
+    - Must include first and last name and the degree(s) (e.g., MD, DO, MBBS, etc.).
+    - Prior attempts using AI tools only returned "MD" or "DO" — this is not acceptable.
+    - The full name does exist and must be extracted.
+
+Email Address
+    - There is one email per record.
+    - Some may be missing — if so, mark as blank.
+    - Email must be clean and valid.
+
+Preliminary Position
+    - Appears at the end of each program block.
+    - Must be extracted and standardized as “Yes” or “No”.
+    -Spacing & Layout
+    -There is no table structure.
+    -Records are inconsistently spaced and wrapped.
+    -Only the 10-digit program number can reliably separate records.
+
+
