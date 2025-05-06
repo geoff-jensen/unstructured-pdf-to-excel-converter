@@ -62,7 +62,7 @@ for program_number, block in paired_entries:
 
     # ----- Flag if missing both email and phone -----
     phone_missing = not any("Ph:" in line for line in lines)
-    flagged = "⚠️ Missing email & phone" if not email and phone_missing else ""
+    flagged = "Missing email & phone" if not email and phone_missing else ""
 
     parsed_data.append([
         program_number,
