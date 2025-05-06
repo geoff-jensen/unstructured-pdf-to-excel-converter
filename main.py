@@ -1,32 +1,51 @@
 import re
-import pdfplumber
-from utils import parse_entry
+import csv
 
+# Read the full text file
+with open("test.txt", "r", encoding="utf-8") as f:
+    full_text = f.read()
 
+# Split the file into entries using the program number in brackets as anchor
+entries = re.split(r"\[(\d{10})\]", full_text)[1:]
 
-with pdfplumber.open("PDF_TO_EXTRACT.pdf") as pdf:
-    full_text = ""
-    for page in pdf.pages:
-        full_text += page.extract_text() + "\n"
+# Group program number + content
+grouped = list(zip(entries[0::2], entries[1::2]))
 
-print(full_text[:2000])
-with open("output_preview.txt", "w", encoding="utf-8") as f:
-    f.write(full_text[:2000])
+parsed_rows = []
+for prog_number, content in grouped:
+    content = content.strip().replace('\n', ' ')  # Flatten the entry into one string
 
+    # Program Name: Starts at start of content, ends at first occurrence of 'Program'
+    prog_name_match = re.search(r"(.*?\bProgram\b)", content)
+    program_name = prog_name_match.group(1).strip() if prog_name_match else ""
 
-# # Find just the program numbers (10 digits anywhere in the text)
-# matches = re.findall(r"\d{10}", full_text)
-# print(f"🔍 Found {len(matches)} 10-digit sequences. First few:")
-# print(matches[:10])
+    # Email
+    email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}", content)
+    email = email_match.group() if email_match else ""
 
-# # Just break at each 10-digit number
-# pattern = r"(\d{10}.*?)(?=\d{10}|$)"
-# entries = re.findall(pattern, full_text, flags=re.DOTALL)
+    # Program Director Name: After email, before 'Continued' or similar
+    director = ""
+    if email:
+        post_email = content.split(email)[-1]
+        dir_match = re.search(r"([A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-zA-Z.\- ]+?,\s*(MD|DO|MBBS|PhD|FACP|FAAP|FRCPC|DSc))", post_email)
+        if dir_match:
+            director = dir_match.group(1)
+        else:
+            # fallback: grab text between email and 'Continued'
+            dir_fallback = re.search(rf"{re.escape(email)}(.*?)Continued", content)
+            if dir_fallback:
+                director = dir_fallback.group(1).strip()
 
-# print(f"✅ Found {len(entries)} program-like blocks.")
-# for i in range(min(3, len(entries))):
-#     print(f"\n--- Entry {i} ---\n{entries[i][:500]}")
+    # Preliminary Position
+    prelim_match = re.search(r"\b(Yes|No)\b", content)
+    prelim = prelim_match.group(1) if prelim_match else ""
 
-# # for i in range(3):
-# #     print(f"\n--- Parsed Entry {i} ---")
-# #     print(parse_entry(entries[i]))
+    parsed_rows.append([prog_number, program_name, director, email, prelim])
+
+# Write to CSV
+with open("parsed_residency_programs.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.writer(f)
+    writer.writerow(["Program Number", "Program Name", "Program Director", "Email", "Preliminary Position"])
+    writer.writerows(parsed_rows)
+
+print(f"✅ Parsed {len(parsed_rows)} entries and wrote to parsed_residency_programs.csv")
