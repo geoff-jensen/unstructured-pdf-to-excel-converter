@@ -1,51 +1,89 @@
 import re
 import csv
 
-# Read the full text file
+# Load the plain text file
 with open("test.txt", "r", encoding="utf-8") as f:
     full_text = f.read()
 
-# Split the file into entries using the program number in brackets as anchor
-entries = re.split(r"\[(\d{10})\]", full_text)[1:]
+# Split into entries based on [10-digit number]
+entries = re.split(r"\[(\d{10})\]", full_text)
+paired_entries = [(entries[i], entries[i + 1]) for i in range(1, len(entries) - 1, 2)]
 
-# Group program number + content
-grouped = list(zip(entries[0::2], entries[1::2]))
+parsed_data = []
 
-parsed_rows = []
-for prog_number, content in grouped:
-    content = content.strip().replace('\n', ' ')  # Flatten the entry into one string
+for program_number, block in paired_entries:
+    lines = block.strip().splitlines()
 
-    # Program Name: Starts at start of content, ends at first occurrence of 'Program'
-    prog_name_match = re.search(r"(.*?\bProgram\b)", content)
-    program_name = prog_name_match.group(1).strip() if prog_name_match else ""
+    # ----- Program Name -----
+    program_name_lines = []
+    for line in lines:
+        program_name_lines.append(line.strip())
+        if "Program" in line:
+            break
 
-    # Email
-    email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}", content)
+    program_name = " ".join(line.strip() for line in program_name_lines)
+    program_name = re.sub(r"\s+", " ", program_name).strip()
+
+    # ----- Email -----
+    email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}", block)
     email = email_match.group() if email_match else ""
 
-    # Program Director Name: After email, before 'Continued' or similar
+    # ----- Director Name -----
     director = ""
     if email:
-        post_email = content.split(email)[-1]
-        dir_match = re.search(r"([A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-zA-Z.\- ]+?,\s*(MD|DO|MBBS|PhD|FACP|FAAP|FRCPC|DSc))", post_email)
-        if dir_match:
-            director = dir_match.group(1)
-        else:
-            # fallback: grab text between email and 'Continued'
-            dir_fallback = re.search(rf"{re.escape(email)}(.*?)Continued", content)
-            if dir_fallback:
-                director = dir_fallback.group(1).strip()
+        after_email = False
+        collected = []
+        for line in lines:
+            if email in line:
+                after_email = True
+                continue
+            if after_email:
+                if any(word in line for word in ["Continued", "Initial", "Provisional"]):
+                    break
+                collected.append(line.strip())
+        director = " ".join(collected).strip()
+    else:
+        # Fallback: collect after "Ph:" if no email
+        after_phone = False
+        collected = []
+        for line in lines:
+            if "Ph:" in line:
+                after_phone = True
+                continue
+            if after_phone:
+                if any(word in line for word in ["Continued", "Initial", "Provisional"]):
+                    break
+                collected.append(line.strip())
+        director = " ".join(collected).strip()
 
-    # Preliminary Position
-    prelim_match = re.search(r"\b(Yes|No)\b", content)
-    prelim = prelim_match.group(1) if prelim_match else ""
+    # ----- Preliminary Position -----
+    prelim_match = re.search(r"\b(Yes|No)\b", block)
+    prelim = prelim_match.group() if prelim_match else ""
 
-    parsed_rows.append([prog_number, program_name, director, email, prelim])
+    # ----- Flag if missing both email and phone -----
+    phone_missing = not any("Ph:" in line for line in lines)
+    flagged = "⚠️ Missing email & phone" if not email and phone_missing else ""
 
-# Write to CSV
-with open("parsed_residency_programs.csv", "w", newline="", encoding="utf-8") as f:
+    parsed_data.append([
+        program_number,
+        program_name,
+        director,
+        email if email else "N/A",
+        prelim,
+        flagged
+    ])
+
+# ----- Write to CSV -----
+with open("parsed_programs.csv", "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
-    writer.writerow(["Program Number", "Program Name", "Program Director", "Email", "Preliminary Position"])
-    writer.writerows(parsed_rows)
+    writer.writerow([
+        "Program Number",
+        "Program Name",
+        "Program Director Name",
+        "Email Address",
+        "Preliminary Position",
+        "Flag"
+    ])
+    writer.writerows(parsed_data)
 
-print(f"✅ Parsed {len(parsed_rows)} entries and wrote to parsed_residency_programs.csv")
+print("CSV file 'parsed_programs.csv' created successfully.")
